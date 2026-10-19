@@ -23,7 +23,10 @@ export const config: Config = ConfigSchema.parse({
   port: process.env.PORT,
   nodeEnv: process.env.NODE_ENV,
   corsOrigins: process.env.CORS_ORIGIN,
-  bedrockMantleApiKey: process.env.BEDROCK_MANTLE_API_KEY,
+  bedrockMantleApiKey:
+    process.env.BEDROCK_MANTLE_API_KEY ||
+    process.env.AWS_BEARER_TOKEN_BEDROCK ||
+    '',
   awsRegion: process.env.AWS_REGION,
   githubToken: process.env.GITHUB_TOKEN,
   workspaceDir: process.env.WORKSPACE_DIR,

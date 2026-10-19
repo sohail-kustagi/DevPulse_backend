@@ -29,8 +29,12 @@ export async function runAgentTurn(
 
   const toolCallsExecuted: string[] = [];
 
-  // When Bedrock Mantle API key is not configured, execute heuristic tool chain for seamless demoing
-  if (!config.bedrockMantleApiKey || config.bedrockMantleApiKey.startsWith('mock-')) {
+  // When Bedrock Mantle API key is not configured or in unit test mode, execute heuristic tool chain
+  if (
+    !config.bedrockMantleApiKey ||
+    config.bedrockMantleApiKey.startsWith('mock-') ||
+    config.nodeEnv === 'test'
+  ) {
     const queryLower = userQuery.toLowerCase();
 
     if (queryLower.includes('scaffold') || queryLower.includes('borrow') || queryLower.includes('create')) {

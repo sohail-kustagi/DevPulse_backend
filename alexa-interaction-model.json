@@ -1,0 +1,53 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "dev pulse",
+      "intents": [
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.NavigateHomeIntent",
+          "samples": []
+        },
+        {
+          "name": "DevPulseIntent",
+          "slots": [
+            {
+              "name": "query",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "borrow {query}",
+            "scaffold {query}",
+            "inspect {query}",
+            "design {query}",
+            "check {query}",
+            "create {query}",
+            "generate {query}",
+            "run {query}",
+            "execute {query}",
+            "please {query}",
+            "can you {query}",
+            "help me {query}",
+            "tell me {query}",
+            "i want to {query}",
+            "how to {query}",
+            "to {query}"
+          ]
+        }
+      ],
+      "types": []
+    }
+  }
+}
