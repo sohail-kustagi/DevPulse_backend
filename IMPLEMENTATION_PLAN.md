@@ -20,34 +20,37 @@
 ## Phase 1: Foundation & HUD Pipeline
 
 ### Goal
-Set up the Express + WebSocket server skeleton and prove the real-time HUD feed works end-to-end with the frontend.
+Set up the Express + WebSocket server skeleton, configure CORS for the Vite dev server, support dual WebSocket routes (`/ws/telemetry` & `/ws/hud`), and prove the real-time HUD feed works end-to-end with `devpluse-Frontend`.
 
 ### Tasks
 
 #### 1.1 — Project Initialization
 ```bash
-mkdir orbitops-backend && cd orbitops-backend
+# In /home/cipher/orbitops/devpluse-backend:
 npm init -y
-# Install core dependencies
-npm install express ws zod dotenv
-npm install -D typescript tsx @types/express @types/ws @types/node vitest
+# Install core runtime dependencies
+npm install express ws zod dotenv cors
+# Install dev dependencies & type definitions
+npm install -D typescript tsx @types/express @types/ws @types/node @types/cors vitest
 ```
 
-- [ ] Create `tsconfig.json` with `"module": "ESNext"`, `"target": "ES2022"`, `"moduleResolution": "bundler"`, strict mode
-- [ ] Create `package.json` scripts: `dev`, `build`, `start`, `test`, `test:watch`, `lint`
-- [ ] Create `.env.example` with all required variables
-- [ ] Create `.gitignore` (node_modules, dist, .env, *.log)
+- [x] Create `tsconfig.json` with `"module": "ESNext"`, `"target": "ES2022"`, `"moduleResolution": "bundler"`, strict mode
+- [x] Create `package.json` scripts: `dev`, `build`, `start`, `test`, `test:watch`, `lint`
+- [x] Create `.env.example` with all required variables
+- [x] Create `.gitignore` (node_modules, dist, .env, *.log)
 
 #### 1.2 — Config Module (`src/config.ts`)
-- [ ] Use Zod to parse and validate environment variables
-- [ ] Export typed config object
-- [ ] Throw on missing required variables at startup
+- [x] Use Zod to parse and validate environment variables
+- [x] Support both `PORT=8000` and `CORS_ORIGIN=http://localhost:5173,http://localhost:8080`
+- [x] Export typed config object
+- [x] Throw descriptive errors on missing required variables at startup
 
 ```typescript
 // Expected exports:
 export const config: {
   port: number;
   nodeEnv: string;
+  corsOrigins: string[];
   bedrockMantleApiKey: string;
   awsRegion: string;
   githubToken: string;
@@ -56,16 +59,27 @@ export const config: {
 ```
 
 #### 1.3 — HUD Event Bus (`src/hud/eventBus.ts`)
-- [ ] Create typed `EventEmitter` that broadcasts to all connected WebSocket clients
-- [ ] Method: `emitEvent(type: AgentEventType, payload: Record<string, unknown>)`
-- [ ] Auto-generates `id` (timestamp + counter) and `timestamp` (ISO 8601)
-- [ ] Maintains a Set of connected `WebSocket` clients
-- [ ] Handles client disconnect cleanup
+- [x] Create typed `EventEmitter` broadcasting to all connected WebSocket clients
+- [x] Dual-Envelope compatibility:
+  - Supports **Format 1** (`type: "VOICE_INPUT" | "THOUGHT" | "TOOL_CALL" | "ARTIFACT_UPDATE"`)
+  - Supports **Format 2** (`event: "voice.intent_received" | "agent.thinking" | "mcp.tool_start" | "mcp.tool_complete" | "artifact.updated" | "workspace.switched" | "cloud.alert"`)
+- [x] Methods:
+  - `emitEvent(event: AgentEvent): void`
+  - Helper methods: `emitVoiceInput(text, subtitle?)`, `emitThinking(thought, latency?, stage?)`, `emitToolStart(tool, args)`, `emitToolComplete(tool, duration_ms, summary, success?)`, `emitArtifact(kind, payload)`, `emitWorkspaceSwitch(projectName, path, branch)`, `emitCloudAlert(source, message)`
+- [x] Auto-generates `id` (`evt-${Date.now()}`) and ISO `timestamp`
+- [x] Maintains a Set of connected `WebSocket` clients and performs disconnect cleanup
 
 ```typescript
 // Expected exports:
 export const hudBus: {
-  emitEvent(type: AgentEventType, payload: Record<string, unknown>): void;
+  emitEvent(data: Record<string, unknown>): void;
+  emitVoiceInput(text: string, subtitle?: string): void;
+  emitThinking(thought: string, latency?: string | number, stage?: string): void;
+  emitToolStart(tool: string, args?: Record<string, unknown>): void;
+  emitToolComplete(tool: string, durationMs: number, summary: string, success?: boolean): void;
+  emitArtifact(kind: 'spec' | 'diff' | 'terminal', payload: Record<string, unknown>): void;
+  emitWorkspaceSwitch(projectName: string, path?: string, branch?: string): void;
+  emitCloudAlert(source: string, message: string): void;
   addClient(ws: WebSocket): void;
   removeClient(ws: WebSocket): void;
   clientCount: number;
@@ -73,15 +87,15 @@ export const hudBus: {
 ```
 
 #### 1.4 — Express Server + WebSocket (`src/index.ts`)
-- [ ] Create Express app on `PORT` (default 8000)
-- [ ] Mount WebSocket upgrade on `/ws/telemetry`
-- [ ] On WS connection: add to `hudBus`, on disconnect: remove
-- [ ] Enable CORS for `http://localhost:8080` (frontend dev server)
-- [ ] Mount health routes
+- [x] Create Express app on `PORT` (default 8000)
+- [x] Enable CORS for `http://localhost:5173` (Vite) and `http://localhost:8080` (Fire TV/static host)
+- [x] Mount WebSocket upgrade on both `/ws/telemetry` AND `/ws/hud` to match `useHUDStream.js`
+- [x] On WS connection: register client in `hudBus`, send initial handshake, on disconnect: remove
+- [x] Mount health routes and MCP endpoint
 
 #### 1.5 — Health Routes (`src/routes/health.ts`, `src/routes/status.ts`)
-- [ ] `GET /health` → `{ status: "ok", uptime: process.uptime(), version: "1.0.0" }`
-- [ ] `GET /api/status` → `{ wsClients, mcpToolsRegistered, mantleConnected, activeWorkspace, lastEventTimestamp }`
+- [x] `GET /health` → `{ status: "ok", uptime: process.uptime(), version: "1.0.0" }`
+- [x] `GET /api/status` → `{ wsClients, mcpToolsRegistered, mantleConnected, activeWorkspace, lastEventTimestamp }`
 
 ### Phase 1 Tests & Validation
 
@@ -89,6 +103,7 @@ export const hudBus: {
 src/hud/__tests__/eventBus.test.ts
 ├── ✓ emitEvent broadcasts to all connected clients
 ├── ✓ emitEvent generates valid id and ISO timestamp
+├── ✓ emitToolStart and emitToolComplete produce matching tool cards
 ├── ✓ addClient/removeClient correctly maintains client set
 ├── ✓ disconnected clients are cleaned up
 └── ✓ emitEvent with no clients does not throw
@@ -100,13 +115,14 @@ src/routes/__tests__/routes.test.ts
 
 src/__tests__/integration/wsConnection.test.ts
 ├── ✓ WebSocket connects to /ws/telemetry
-├── ✓ Receives event when hudBus.emitEvent is called
+├── ✓ WebSocket connects to /ws/hud
+├── ✓ Receives event when hudBus broadcasts
 ├── ✓ Receives correctly shaped AgentEvent JSON
 ├── ✓ Multiple clients receive same broadcast
 └── ✓ Client disconnect reduces wsClients count
 ```
 
-**Validation Gate:** Start the backend (`npm run dev`), start the frontend (`npm run dev` in the frontend repo), and confirm the frontend's connection status changes from `DEMO_STREAM` to `CONNECTED`. Manually call `hudBus.emitEvent("VOICE_INPUT", { text: "Hello world" })` and see it appear in the Activity Stream.
+**Validation Gate:** Start the backend (`npm run dev`), start the frontend (`cd ../devpluse-Frontend && npm run dev` at `http://localhost:5173`), and confirm the frontend's top header badge changes from simulated to **Connected**. Emit a sample voice and tool event, and verify the center pane stream and right pane tabs update live in the UI.
 
 ---
 
@@ -123,38 +139,57 @@ npm install @modelcontextprotocol/sdk simple-git execa
 ```
 
 #### 2.2 — Tool Registry (`src/mcp/toolRegistry.ts`)
-- [ ] Define `DevPulseTool<T>` interface (name, description, Zod schema, jsonSchema, execute fn)
-- [ ] `zodToJsonSchema(schema)` — converts Zod schema to JSON Schema for OpenAI function calling
-- [ ] `executeToolWithTelemetry(tool, rawArgs)` — validates args, emits `mcp.tool_start` + `mcp.tool_complete` HUD events
-- [ ] `getAllTools()` — returns array of all registered tools
-- [ ] `getToolByName(name)` — lookup by name
+- [x] Define `DevPulseTool<T>` interface (name, description, Zod schema, jsonSchema, execute fn)
+- [x] `zodToJsonSchema(schema)` — converts Zod schema to JSON Schema for OpenAI function calling
+- [x] `executeToolWithTelemetry(tool, rawArgs)` — validates args, emits `mcp.tool_start` + `mcp.tool_complete` HUD events
+- [x] `getAllTools()` — returns array of all registered tools
+- [x] `getToolByName(name)` — lookup by name
 
 #### 2.3 — MCP Server (`src/mcp/server.ts`)
-- [ ] Create `@modelcontextprotocol/sdk` `McpServer` instance
-- [ ] Register all 7 tools from the registry
-- [ ] Expose Streamable HTTP / SSE transport on `/mcp`
-- [ ] Mount on Express app
+- [x] Create `@modelcontextprotocol/sdk` `McpServer` instance
+- [x] Register all 7 tools from the registry
+- [x] Expose Streamable HTTP / SSE transport on `/mcp`
+- [x] Mount on Express app
 
 #### 2.4 — Tool 1: `scan_past_projects` (`src/mcp/tools/pastProjects.ts`)
-- [ ] Input: `{ basePath?: string }`
-- [ ] Recursively scan for `package.json`, `pyproject.toml`, `README.md`
-- [ ] Extract project name, description, dependencies, and reusable module paths
-- [ ] Return array of `{ name, path, stack, modules: string[] }`
+- [x] Input: `{ basePath?: string }`
+- [x] Recursively scan for `package.json`, `pyproject.toml`, `README.md`
+- [x] Extract project name, description, dependencies, and reusable module paths
+- [x] Return array of `{ name, path, stack, modules: string[] }`
 
 #### 2.5 — Tool 2: `generate_project_spec` (`src/mcp/tools/specAndScaffold.ts`)
-- [ ] Input: `{ name, description, components }`
-- [ ] Generate `SYSTEM_DESIGN.md` with Mermaid diagram and component descriptions
-- [ ] Generate `IMPLEMENTATION_PLAN.md` with phases and tasks
-- [ ] Write files to `WORKSPACE_DIR/<name>/`
-- [ ] Emit `ARTIFACT_UPDATE` with `kind: "spec"` and full Markdown content
+- [x] Input: `{ name, description, components }`
+- [x] Generate `SYSTEM_DESIGN.md` with Mermaid diagram, contract specifications, and component descriptions
+- [x] Generate `IMPLEMENTATION_PLAN.md` with phases and tasks
+- [x] Write files to `WORKSPACE_DIR/<name>/`
+- [x] Emit frontend-compatible `artifact.updated` event with `artifact_type: "spec"` and rich spec payload:
+  ```typescript
+  {
+    event: "artifact.updated",
+    payload: {
+      artifact_type: "spec",
+      spec: {
+        title: "SYSTEM_DESIGN.md",
+        flowchart: {
+          node1: { title: "voice-gateway", desc: "Reference Module" },
+          node2: { title: "Auth Adapter", desc: "HMAC Verification" },
+          node3: { title: name, desc: "Target Service" },
+          note: "Idempotency layer active"
+        },
+        contract: `POST /v1/events\nContent-Type: application/json\nX-Signature: <hmac>`,
+        content: markdownSpecContent
+      }
+    }
+  }
+  ```
 
 #### 2.6 — Tool 3: `scaffold_workspace` (`src/mcp/tools/specAndScaffold.ts`)
-- [ ] Input: `{ name, template, borrowFrom? }`
-- [ ] Create directory structure based on template (fastapi, express, nextjs)
-- [ ] Copy reusable modules from `borrowFrom` paths if specified
-- [ ] Write boilerplate source files + test files
-- [ ] Run test runner (`pytest` or `npm test`) and capture output
-- [ ] Emit `ARTIFACT_UPDATE` with `kind: "terminal"` containing test output
+- [x] Input: `{ name, template, borrowFrom? }`
+- [x] Create directory structure based on template (fastapi, express, nextjs)
+- [x] Copy reusable modules from `borrowFrom` paths if specified
+- [x] Write boilerplate source files + test files
+- [x] Run test runner (`pytest` or `npm test`) and capture output
+- [x] Emit `ARTIFACT_UPDATE` with `kind: "terminal"` containing test output
 
 ### Phase 2 Tests & Validation
 
@@ -208,24 +243,37 @@ npm install @octokit/rest
 ```
 
 #### 3.2 — Tool 4: `inspect_file_and_audit` (`src/mcp/tools/codeInspector.ts`)
-- [ ] Input: `{ filePath, startLine?, endLine?, lint? }`
-- [ ] Read file, prefix each line with line number (`1: import ...`)
-- [ ] If `startLine`/`endLine` specified, slice the range
-- [ ] If `lint: true`, run `npx eslint` (JS/TS) or `ruff check` (Python) via `execa`
-- [ ] Return `{ content: string, lineCount: number, lintIssues?: LintIssue[] }`
+- [x] Input: `{ filePath, startLine?, endLine?, lint? }`
+- [x] Read file, prefix each line with line number (`1: import ...`)
+- [x] If `startLine`/`endLine` specified, slice the range
+- [x] If `lint: true`, run `npx eslint` (JS/TS) or `ruff check` (Python) via `execa`
+- [x] Return `{ content: string, lineCount: number, lintIssues?: LintIssue[] }`
 
 #### 3.3 — Tool 5: `triage_and_patch_error` (`src/mcp/tools/codeInspector.ts`)
-- [ ] **diagnose mode:** Read `.devpulse_error.log` or run test command, capture stack trace, read surrounding code lines
-- [ ] **patch mode:** Apply search-and-replace to target file, generate unified diff with `simple-git`, re-run test suite
-- [ ] Emit `ARTIFACT_UPDATE` with `kind: "diff"` (patch content) and `kind: "terminal"` (test results)
+- [x] **diagnose mode:** Read `.devpulse_error.log` or run test command, capture stack trace, read surrounding code lines
+- [x] **patch mode:** Apply search-and-replace to target file, generate unified diff with `simple-git`, re-run test suite
+- [x] Emit frontend-compatible `artifact.updated` event for code diff (matching `DiffViewer.jsx`):
+  ```typescript
+  {
+    event: "artifact.updated",
+    payload: {
+      artifact_type: "code_diff",
+      file_path: filePath,
+      summary: "Fixed HMAC header lookup key error",
+      diff: unifiedDiffString,
+      test_result: { passed: passedCount, failed: failedCount, duration_ms: durationMs }
+    }
+  }
+  ```
+- [x] Also emit `ARTIFACT_UPDATE` with `kind: "terminal"` to update `PytestViewer.jsx` terminal output tab
 
 #### 3.4 — Tool 6: `provision_github_repo` (`src/mcp/tools/githubOps.ts`)
-- [ ] Input: `{ name, private?, localPath }`
-- [ ] Create repo via `octokit.repos.createForAuthenticatedUser()`
-- [ ] Write `.github/workflows/ci.yml` for automated testing
-- [ ] `git init` + `git add .` + `git commit` + `git remote add origin` + `git push`
-- [ ] Emit `TOOL_CALL` with `tool: "git_commit"` and `args.branch: "main"`
-- [ ] Return `{ repoUrl, commitSha, ciWorkflowUrl }`
+- [x] Input: `{ name, private?, localPath }`
+- [x] Create repo via `octokit.repos.createForAuthenticatedUser()`
+- [x] Write `.github/workflows/ci.yml` for automated testing
+- [x] `git init` + `git add .` + `git commit` + `git remote add origin` + `git push`
+- [x] Emit `TOOL_CALL` with `tool: "git_commit"` and `args.branch: "main"`
+- [x] Return `{ repoUrl, commitSha, ciWorkflowUrl }`
 
 ### Phase 3 Tests & Validation
 
@@ -271,29 +319,29 @@ npm install openai @aws-sdk/client-cloudwatch-logs
 ```
 
 #### 4.2 — Mantle Client (`src/agent/mantleClient.ts`)
-- [ ] Initialize `openai` SDK with Bedrock Mantle base URL and API key
-- [ ] Export `mantleClient` and `MODEL_ID` constant
-- [ ] Add connection health check method
+- [x] Initialize `openai` SDK with Bedrock Mantle base URL and API key
+- [x] Export `mantleClient` and `MODEL_ID` constant
+- [x] Add connection health check method
 
 #### 4.3 — System Prompt (`src/agent/systemPrompt.ts`)
-- [ ] Voice-first prompt: instruct model to give concise spoken responses
-- [ ] Include tool descriptions and usage guidance
-- [ ] Include workspace context (active project, recent errors)
+- [x] Voice-first prompt: instruct model to give concise spoken responses
+- [x] Include tool descriptions and usage guidance
+- [x] Include workspace context (active project, recent errors)
 
 #### 4.4 — Orchestrator (`src/agent/orchestrator.ts`)
-- [ ] `runAgentTurn(query: string, sessionAttrs: SessionState): Promise<AgentResult>`
-- [ ] Build messages array with system prompt + user query
-- [ ] Loop: call `mantleClient.chat.completions.create()` with tools
-- [ ] On tool calls: execute via `executeToolWithTelemetry()`, append results, continue loop
-- [ ] On text response: return `{ spokenSummary, fullResponse }`
-- [ ] Emit `THOUGHT` events for each reasoning step
-- [ ] Max iterations: 10 (safety limit)
+- [x] `runAgentTurn(query: string, sessionAttrs: SessionState): Promise<AgentResult>`
+- [x] Build messages array with system prompt + user query
+- [x] Loop: call `mantleClient.chat.completions.create()` with tools
+- [x] On tool calls: execute via `executeToolWithTelemetry()`, append results, continue loop
+- [x] On text response: return `{ spokenSummary, fullResponse }`
+- [x] Emit `THOUGHT` events for each reasoning step
+- [x] Max iterations: 10 (safety limit)
 
 #### 4.5 — Tool 7: `check_cloud_deployments` (`src/mcp/tools/cloudMonitor.ts`)
-- [ ] **AWS path:** Use `FilterLogEventsCommand` to query CloudWatch logs
-- [ ] **Heroku path:** Use `fetch` to query `/apps/{app}/dynos` and `/apps/{app}/log-sessions`
-- [ ] Aggregate error counts: `ERROR`, `CRITICAL`, `5xx`, `H10`
-- [ ] Return spoken digest: "AWS ECS has 3 errors in the last 10 minutes..."
+- [x] **AWS path:** Use `FilterLogEventsCommand` to query CloudWatch logs
+- [x] **Heroku path:** Use `fetch` to query `/apps/{app}/dynos` and `/apps/{app}/log-sessions`
+- [x] Aggregate error counts: `ERROR`, `CRITICAL`, `5xx`, `H10`
+- [x] Return spoken digest: "AWS ECS has 3 errors in the last 10 minutes..."
 
 ### Phase 4 Tests & Validation
 
@@ -341,26 +389,26 @@ npm install ask-sdk-core ask-sdk-express-adapter
 ```
 
 #### 5.2 — SSML Sanitizer (`src/alexa/ssml.ts`)
-- [ ] Strip/escape characters that break TTS: `&`, `<`, `>`, `"`, `'`
-- [ ] Replace file paths with spoken-friendly form: `src/auth/jwt.ts` → "source auth JWT"
-- [ ] Replace code symbols: `=>` → "arrow", `&&` → "and", `||` → "or"
-- [ ] Wrap numbers/acronyms in `<say-as>` tags
-- [ ] Keep output under Alexa's 8000-character SSML limit
+- [x] Strip/escape characters that break TTS: `&`, `<`, `>`, `"`, `'`
+- [x] Replace file paths with spoken-friendly form: `src/auth/jwt.ts` → "source auth JWT"
+- [x] Replace code symbols: `=>` → "arrow", `&&` → "and", `||` → "or"
+- [x] Wrap numbers/acronyms in `<say-as>` tags
+- [x] Keep output under Alexa's 8000-character SSML limit
 
 #### 5.3 — Alexa Webhook (`src/alexa/webhook.ts`)
-- [ ] Create ASK intent handlers: `DevPulseIntentHandler`, `LaunchRequestHandler`, `HelpIntentHandler`, `CancelStopHandler`, `SessionEndedHandler`, `FallbackHandler`
-- [ ] `DevPulseIntentHandler`:
+- [x] Create ASK intent handlers: `DevPulseIntentHandler`, `LaunchRequestHandler`, `HelpIntentHandler`, `CancelStopHandler`, `SessionEndedHandler`, `FallbackHandler`
+- [x] `DevPulseIntentHandler`:
   - Extract spoken query from slot
   - Emit `VOICE_INPUT` to HUD
   - Run `runAgentTurn()` wrapped in `Promise.race()` with 6.5s timeout
   - On timeout: return "I'm executing that workflow in the background now..."
   - On success: return SSML-sanitized spoken summary
-- [ ] Mount via `ExpressAdapter` at `POST /api/alexa`
-- [ ] Manage `sessionAttributes` (activeRepo, lastError, pendingJobId)
+- [x] Mount via `ExpressAdapter` at `POST /api/alexa`
+- [x] Manage `sessionAttributes` (activeRepo, lastError, pendingJobId)
 
 #### 5.4 — Error Handler Registration
-- [ ] Register ASK error handler to catch unexpected failures
-- [ ] Log errors and return friendly spoken message
+- [x] Register ASK error handler to catch unexpected failures
+- [x] Log errors and return friendly spoken message
 
 ### Phase 5 Tests & Validation
 
@@ -401,8 +449,8 @@ src/__tests__/e2e/fullPipeline.test.ts
 **Validation Gate (Full Integration Test):**
 
 1. Start backend: `npm run dev`
-2. Start frontend: `cd ../OrbitOps-frontend && npm run dev`
-3. Open `http://localhost:8080` — confirm `CONNECTED` status (not `DEMO_STREAM`)
+2. Start frontend: `cd ../devpluse-Frontend && npm run dev`
+3. Open `http://localhost:5173` (or `http://localhost:8080` for Fire TV wrapper) — confirm `CONNECTED` status (not `DEMO_STREAM` / `simulated`)
 4. Use ngrok/Cloudflare Tunnel: `ngrok http 8000`
 5. Configure Alexa Skill webhook URL to the ngrok HTTPS URL + `/api/alexa`
 6. Speak to Echo Dot: "Alexa, open DevPulse"

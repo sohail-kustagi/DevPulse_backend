@@ -1,7 +1,9 @@
 node_modules/
 dist/
-.env
 *.log
 .DS_Store
 coverage/
-.turbo/
+stripe-relay/
+test-scaffold-fastapi/
+test-service-spec/
+app/
