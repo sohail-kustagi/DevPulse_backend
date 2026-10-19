@@ -10,3 +10,4 @@ app/
 code_dump.txt
 .env
 .env.*
+bin/
