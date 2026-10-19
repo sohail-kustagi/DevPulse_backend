@@ -8,3 +8,5 @@ test-scaffold-fastapi/
 test-service-spec/
 app/
 code_dump.txt
+.env
+.env.*

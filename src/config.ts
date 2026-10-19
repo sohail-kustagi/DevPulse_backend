@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { z } from 'zod';
 
 const ConfigSchema = z.object({
@@ -12,6 +13,9 @@ const ConfigSchema = z.object({
       val.split(',').map((origin) => origin.trim()).filter(Boolean)
     ),
   bedrockMantleApiKey: z.string().default(''),
+  bedrockMantleBaseUrl: z
+    .string()
+    .default('https://bedrock-mantle.us-east-1.api.aws/v1'),
   awsRegion: z.string().default('us-east-1'),
   githubToken: z.string().default(''),
   workspaceDir: z.string().default(process.cwd()),
@@ -27,6 +31,11 @@ export const config: Config = ConfigSchema.parse({
     process.env.BEDROCK_MANTLE_API_KEY ||
     process.env.AWS_BEARER_TOKEN_BEDROCK ||
     '',
+  bedrockMantleBaseUrl:
+    process.env.BEDROCK_MANTLE_BASE_URL ||
+    process.env.base_url ||
+    process.env.BASE_URL ||
+    `https://bedrock-mantle.${process.env.AWS_REGION || 'us-east-1'}.api.aws/v1`,
   awsRegion: process.env.AWS_REGION,
   githubToken: process.env.GITHUB_TOKEN,
   workspaceDir: process.env.WORKSPACE_DIR,

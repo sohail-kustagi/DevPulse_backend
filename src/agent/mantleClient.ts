@@ -4,7 +4,7 @@ import { config } from '../config.js';
 export const MODEL_ID = 'openai.gpt-oss-120b';
 
 // Regional Amazon Bedrock Mantle OpenAI-compatible endpoint
-export const mantleBaseURL = `https://bedrock-mantle.${config.awsRegion}.api.aws/v1`;
+export const mantleBaseURL = config.bedrockMantleBaseUrl;
 
 export const mantleClient = new OpenAI({
   apiKey: config.bedrockMantleApiKey || 'mock-mantle-api-key',
