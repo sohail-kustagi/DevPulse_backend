@@ -148,7 +148,7 @@ export async function runAgentTurn(
 
   const tools = toolRegistry.getOpenAITools();
   let iterations = 0;
-  const maxIterations = 10;
+  const maxIterations = 4;
 
   while (iterations < maxIterations) {
     iterations++;
@@ -158,7 +158,8 @@ export async function runAgentTurn(
       messages,
       tools: tools.length > 0 ? tools : undefined,
       tool_choice: 'auto',
-      temperature: 0.2,
+      temperature: 0.1,
+      max_tokens: 300,
     });
 
     const choice = response.choices[0];
@@ -171,6 +172,10 @@ export async function runAgentTurn(
         const functionCall = (call as any).function;
         if (!functionCall) continue;
         const toolName = functionCall.name;
+        if (toolCallsExecuted.filter((t) => t === toolName).length >= 1) {
+          // Skip redundant re-invocations of the same tool in the same turn
+          continue;
+        }
         toolCallsExecuted.push(toolName);
 
         let args: any = {};

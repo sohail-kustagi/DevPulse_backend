@@ -76,19 +76,27 @@ export const DevPulseIntentHandler: RequestHandler = {
 
     const raceResult = await Promise.race([agentPromise, timeoutPromise]);
 
+    const reprompt = sanitizeSSML('What would you like me to inspect or execute next?');
+
     if ('isTimeout' in raceResult && raceResult.isTimeout) {
       // 6.5s exceeded: Respond immediately to Alexa so connection is not dropped,
       // while background agentPromise continues running and updating the HUD!
       const timeoutSpeech = sanitizeSSML(
         "I'm executing that multi-step workflow in the background now. You can watch the live architecture diagrams, diffs, and test results stream on your DevPulse HUD."
       );
-      return handlerInput.responseBuilder.speak(timeoutSpeech).getResponse();
+      return handlerInput.responseBuilder
+        .speak(timeoutSpeech)
+        .reprompt(reprompt)
+        .getResponse();
     }
 
     // Agent completed within 6.5s
     const completedResult = raceResult as any;
     const spoken = sanitizeSSML(completedResult.spokenSummary);
-    return handlerInput.responseBuilder.speak(spoken).getResponse();
+    return handlerInput.responseBuilder
+      .speak(spoken)
+      .reprompt(reprompt)
+      .getResponse();
   },
 };
 
