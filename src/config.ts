@@ -3,9 +3,14 @@ import { z } from 'zod';
 const ConfigSchema = z.object({
   port: z.coerce.number().default(8000),
   nodeEnv: z.string().default('development'),
-  corsOrigins: z.string().default('http://localhost:5173,http://localhost:8080').transform((val) =>
-    val.split(',').map((origin) => origin.trim()).filter(Boolean)
-  ),
+  corsOrigins: z
+    .string()
+    .default(
+      'http://localhost:5173,http://127.0.0.1:5173,http://localhost:8080,http://127.0.0.1:8080,http://localhost:3000,http://127.0.0.1:3000'
+    )
+    .transform((val) =>
+      val.split(',').map((origin) => origin.trim()).filter(Boolean)
+    ),
   bedrockMantleApiKey: z.string().default(''),
   awsRegion: z.string().default('us-east-1'),
   githubToken: z.string().default(''),

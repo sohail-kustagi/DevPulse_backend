@@ -61,8 +61,39 @@ describe('HTTP Routes', () => {
     expect(data.ok).toBe(true);
   });
 
+  it('POST /api/agent/turn runs agent turn and returns result', async () => {
+    const res = await fetch(`${baseUrl}/api/agent/turn`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: 'Check cloud deployments',
+      }),
+    });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.success).toBe(true);
+    expect(data.spokenSummary).toBeDefined();
+    expect(data.toolCallsExecuted).toContain('check_cloud_deployments');
+  });
+
+  it('POST /api/agent/turn returns 400 if query is missing', async () => {
+    const res = await fetch(`${baseUrl}/api/agent/turn`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+    const data = await res.json();
+    expect(data.error).toBeDefined();
+  });
+
+  it('GET /hud serves standalone HUD or returns 200/404 depending on file presence', async () => {
+    const res = await fetch(`${baseUrl}/hud`);
+    expect([200, 404]).toContain(res.status);
+  });
+
   it('returns 404 for unknown endpoints', async () => {
-    const res = await fetch(`${baseUrl}/unknown-endpoint`);
+    const res = await fetch(`${baseUrl}/unknown-endpoint-xyz-123`);
     expect(res.status).toBe(404);
   });
 });

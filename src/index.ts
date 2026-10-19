@@ -1,3 +1,6 @@
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 import http from 'http';
 import express from 'express';
 import cors from 'cors';
@@ -8,6 +11,10 @@ import { healthRouter } from './routes/health.js';
 import { statusRouter } from './routes/status.js';
 import { mcpRouter } from './mcp/server.js';
 import { alexaRouter } from './alexa/webhook.js';
+import { runAgentTurn } from './agent/orchestrator.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export const app = express();
 
@@ -37,6 +44,30 @@ app.use(healthRouter);
 app.use(statusRouter);
 app.use(mcpRouter);
 app.use(alexaRouter);
+
+// Direct Agent Turn endpoint - lets web HUD or test scripts invoke the Bedrock Mantle agent directly
+app.post('/api/agent/turn', async (req, res) => {
+  try {
+    const { query, workspace, sessionState } = req.body || {};
+    if (!query || typeof query !== 'string') {
+      return res.status(400).json({ error: 'Missing or invalid query in request body' });
+    }
+
+    // Emit voice input event to HUD
+    hudBus.emitVoiceInput(query, 'WEB HUD PROMPT');
+
+    // Run agent turn
+    const result = await runAgentTurn(query, {
+      activeWorkspace: workspace || config.workspaceDir,
+      ...sessionState,
+    });
+
+    return res.json({ success: true, ...result });
+  } catch (err: any) {
+    console.error('[API] /api/agent/turn error:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Agent execution failed' });
+  }
+});
 
 // Demo trigger endpoint for manual testing from UI or curl
 app.post('/api/demo/trigger', (req, res) => {
@@ -71,6 +102,31 @@ app.post('/api/demo/trigger', (req, res) => {
   }
   res.json({ ok: true, timestamp: new Date().toISOString() });
 });
+
+// Static frontend serving: Serve standalone_hud.html or React Vite build on Port 8000
+const candidates = [
+  path.resolve(process.cwd(), '../devpluse-Frontend'),
+  path.resolve(__dirname, '../../devpluse-Frontend'),
+];
+const frontendDir = candidates.find((d) => fs.existsSync(d)) || candidates[0];
+
+// 1. Direct route for zero-build standalone HUD
+app.get(['/hud', '/standalone'], (_req, res) => {
+  const standalonePath = path.join(frontendDir, 'standalone_hud.html');
+  if (fs.existsSync(standalonePath)) {
+    return res.sendFile(standalonePath);
+  }
+  return res.status(404).send('standalone_hud.html not found');
+});
+
+// 2. Serve built React bundle from dist if available
+const distDir = path.join(frontendDir, 'dist');
+if (fs.existsSync(distDir)) {
+  app.use(express.static(distDir));
+  app.get('/', (_req, res) => {
+    res.sendFile(path.join(distDir, 'index.html'));
+  });
+}
 
 // Create HTTP Server & WebSocket Server
 export const server = http.createServer(app);
